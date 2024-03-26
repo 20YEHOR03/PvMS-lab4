@@ -57,3 +57,4 @@ D:\Projects\Lab4Bot\bin\Debug\net8.0\Microsoft.Extensions.Caching.Abstractions.d
 D:\Projects\Lab4Bot\bin\Debug\net8.0\Microsoft.Extensions.Caching.Memory.dll
 D:\Projects\Lab4Bot\bin\Debug\net8.0\Npgsql.dll
 D:\Projects\Lab4Bot\bin\Debug\net8.0\Npgsql.EntityFrameworkCore.PostgreSQL.dll
+D:\Projects\Lab4Bot\obj\Debug\net8.0\Lab4Bot.sourcelink.json

@@ -10,10 +10,11 @@
 using System;
 using System.Reflection;
 
+[assembly: Microsoft.Extensions.Configuration.UserSecrets.UserSecretsIdAttribute("0f972939-156a-4b9d-82e3-ab2b38b205c2")]
 [assembly: System.Reflection.AssemblyCompanyAttribute("Lab4Bot")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+96eb41548cf4a03125ad42cb363a631d9e43777d")]
 [assembly: System.Reflection.AssemblyProductAttribute("Lab4Bot")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Lab4Bot")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

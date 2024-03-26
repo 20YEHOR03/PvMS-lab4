@@ -11,11 +11,16 @@ public class UniversityDbContext : DbContext
     public DbSet<Classroom> Classrooms { get; set; }
     public DbSet<UserActivity> UserActivities { get; set; }
 
-    private const string connectionString = ""; //TODO use your database connection string for PostgreSQL
+    private string _connectionString;
+
+    public UniversityDbContext(string connectionString)
+    {
+        _connectionString = connectionString;
+    }
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
-        optionsBuilder.UseNpgsql(connectionString);
+        optionsBuilder.UseNpgsql(_connectionString);
     }
     
     public void SeedData()
@@ -51,7 +56,8 @@ public class UniversityDbContext : DbContext
                     floor.Building.Name.Contains('І') ? "і" : "";
                 for (int i = 1; i <= 20; i++)
                 {
-                    Classrooms.Add(new Classroom { FloorId = floor.Id, Number = $"{floor.Number}{(i < 10 ? "0" + i : i)}{building}"});
+                    Classrooms.Add(new Classroom { FloorId = floor.Id, Number = $"{floor.Number}" +
+                        $"{(i < 10 ? "0" + i : i)}{building}"});
                 }
             }
             SaveChanges();

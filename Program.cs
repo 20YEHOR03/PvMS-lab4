@@ -1,6 +1,7 @@
 ﻿using Lab4Bot;
 using Lab4Bot.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Telegram.Bot;
 using Telegram.Bot.Exceptions;
 using Telegram.Bot.Polling;
@@ -13,19 +14,24 @@ using User = Telegram.Bot.Types.User;
 class Program
 {
     private static ITelegramBotClient _botClient;
-    private static UniversityDbContext _dbContext = new UniversityDbContext();
+    private static UniversityDbContext _dbContext;
+    private static string _connectionString;
 
     static async Task Main()
     {
-        _botClient = new TelegramBotClient(""); //TODO: use your token
-
+        var config = new ConfigurationBuilder()
+            .AddUserSecrets<Program>()
+            .Build();
+        
+        _botClient = new TelegramBotClient(config["token"]);
+        _connectionString = config["connectionString"];
          var receiverOptions = new ReceiverOptions
         {
             AllowedUpdates = new[] { UpdateType.Message },
             ThrowPendingUpdates = true,
         };
          
-        using (var dbContext = new UniversityDbContext())
+        using (var dbContext = new UniversityDbContext(_connectionString))
         {
             dbContext.Database.EnsureCreated();
             dbContext.SeedData();
@@ -42,27 +48,29 @@ class Program
         await Task.Delay(-1);
     }
 
-    private static async Task HandleError(ITelegramBotClient botClient, Exception error, CancellationToken cancellationToken)
+    private static async Task HandleError(
+        ITelegramBotClient botClient, 
+        Exception error, 
+        CancellationToken cancellationToken)
     {
         var errorMessage = error switch
         {
-            ApiRequestException apiRequestException => $"Telegram API Error:\n[{apiRequestException.ErrorCode}]\n{apiRequestException.Message}",
+            ApiRequestException apiRequestException => 
+                $"Telegram API Error:\n[{apiRequestException.ErrorCode}]\n{apiRequestException.Message}",
             _ => error.ToString()
         };
 
         Console.WriteLine(errorMessage);
     }
 
-    private static async Task HandleUpdate(ITelegramBotClient botClient, Update update, CancellationToken cancellationToken)
+    private static async Task HandleUpdate(
+        ITelegramBotClient botClient, 
+        Update update, 
+        CancellationToken cancellationToken)
     {
         try
         {
-            switch (update.Type)
-            {
-                case UpdateType.Message:
-                    await HandleMessageUpdate(botClient, update.Message);
-                    break;
-            }
+            await HandleMessageUpdate(botClient, update.Message);
         }
         catch (Exception ex)
         {
@@ -87,7 +95,12 @@ class Program
         }
     }
     
-    private static async Task HandleTextMessage(ITelegramBotClient botClient, long chatId, string text, int messageId, User user)
+    private static async Task HandleTextMessage(
+        ITelegramBotClient botClient, 
+        long chatId, 
+        string text, 
+        int messageId, 
+        User user)
     {
         if (text == "/start")
         {
@@ -95,7 +108,8 @@ class Program
         }
         else if (text == "Пошук аудиторії")
         {
-            await botClient.SendTextMessageAsync(chatId, "Введіть номер аудиторії (номер поверху та літера корпусу, наприклад, 302і):");
+            await botClient.SendTextMessageAsync(chatId, 
+                "Введіть номер аудиторії (номер поверху та літера корпусу, наприклад, 302і):");
         }
         else if (text == "Статистика")
         {
@@ -121,7 +135,8 @@ class Program
             }
             else
             {
-                await botClient.SendTextMessageAsync(chatId, "Введено невірний формат аудиторії. Будь ласка, введіть номер аудиторії у форматі 302і.");
+                await botClient.SendTextMessageAsync(chatId, 
+                    "Введено невірний формат аудиторії. Будь ласка, введіть номер аудиторії у форматі 302і.");
             }
         }
     }
@@ -143,13 +158,15 @@ class Program
 
     private static async Task HandleRoomSearch(ITelegramBotClient botClient, long chatId, string roomNumber, User user)
     {
-        using (var dbContext = new UniversityDbContext())
+        using (var dbContext = new UniversityDbContext(_connectionString))
         {
             var room = dbContext.Classrooms.FirstOrDefault(r => r.Number == roomNumber);
             if (room != null)
             {
-                var floor = dbContext.Floors.Include(f => f.Building).FirstOrDefault(f => f.Id == room.FloorId);
-                await botClient.SendTextMessageAsync(chatId, $"Аудиторія {roomNumber} знаходиться у корпусі {floor.Building.Name} на {floor.Number} поверсі.");
+                var floor = dbContext.Floors.Include(f => f.Building).
+                    FirstOrDefault(f => f.Id == room.FloorId);
+                await botClient.SendTextMessageAsync(chatId, $"Аудиторія {roomNumber} знаходиться у корпусі " +
+                                                             $"\"{floor.Building.Name}\" на {floor.Number} поверсі.");
                 
                 dbContext.UserActivities.Add(new UserActivity
                 {
@@ -182,7 +199,12 @@ class Program
         await botClient.SendTextMessageAsync(chatId, "Статистика:", replyMarkup: replyMarkup);
     }
     
-    private static async Task HandleStatisticsMenu(ITelegramBotClient botClient, long chatId, string text, int messageId, User user)
+    private static async Task HandleStatisticsMenu(
+        ITelegramBotClient botClient, 
+        long chatId, 
+        string text, 
+        int messageId, 
+        User user)
     {
         switch (text)
         {
@@ -190,12 +212,10 @@ class Program
                 await ShowStartMenu(botClient, chatId);
                 break;
             case "Кількість підписників":
-                // Логіка для показу кількості підписників
-                int subscriberCount = await GetSubscriberCount(botClient);
+                int subscriberCount = await GetSubscriberCount();
                 await botClient.SendTextMessageAsync(chatId, $"Кількість підписників: {subscriberCount}");
                 break;
             case "Власна активність":
-                // Логіка для показу власної активності користувача
                 await ShowUserActivity(botClient, chatId, user.Id);
                 break;
             default:
@@ -204,23 +224,29 @@ class Program
         }
     }
     
-    private static async Task<int> GetSubscriberCount(ITelegramBotClient botClient)
+    private static async Task<int> GetSubscriberCount()
     {
-        var uniqueUserIds = _dbContext.UserActivities.Select(ua => ua.UserId).Distinct().Count();
-        return uniqueUserIds;
+        using (var dbContext = new UniversityDbContext(_connectionString))
+        {
+            var uniqueUserIds = dbContext.UserActivities.Select(ua => ua.UserId).Distinct().Count();
+            return uniqueUserIds;
+        }
     }
     
     private static async Task ShowUserActivity(ITelegramBotClient botClient, long chatId, long userId)
     {
-        using (var dbContext = new UniversityDbContext())
+        using (var dbContext = new UniversityDbContext(_connectionString))
         {
-            var userActivity = dbContext.UserActivities.Where(ua => ua.UserId == userId).OrderByDescending(ua => ua.Time).FirstOrDefault();
+            var userActivity = dbContext.UserActivities.
+                Where(ua => ua.UserId == userId).
+                OrderByDescending(ua => ua.Time).
+                FirstOrDefault();
+            
             var userActivityCount = dbContext.UserActivities.Count(ua => ua.UserId == userId);
 
             if (userActivity != null)
             {
                 await botClient.SendTextMessageAsync(chatId, $"Ваша остання активність:" +
-                                                             $"\nПовідомлень відправлено: {userActivity.MessagesSent}" +
                                                              $"\nОстання аудиторія, яку ви шукали: {userActivity.LastClassroomSearched}" +
                                                              $"\nЧас останньої активності: {userActivity.Time}" +
                                                              $"\nЗагальна кількість запитів: { userActivityCount}");
@@ -234,7 +260,7 @@ class Program
 
     private static async Task ShowBuildingsMenu(ITelegramBotClient botClient, long chatId)
     {
-        using (var dbContext = new UniversityDbContext())
+        using (var dbContext = new UniversityDbContext(_connectionString))
         {
             var buildings = dbContext.Buildings.ToList();
             var keyboardButtons = buildings.Select(b => new KeyboardButton(b.Name));
@@ -246,7 +272,7 @@ class Program
     
     private static bool IsBuilding(string text)
     {
-        using (var dbContext = new UniversityDbContext())
+        using (var dbContext = new UniversityDbContext(_connectionString))
         {
             return dbContext.Buildings.Any(b => b.Name == text);
         }
@@ -254,7 +280,7 @@ class Program
 
     private static async Task HandleBuildingSelection(ITelegramBotClient botClient, long chatId, string buildingName)
     {
-        using (var dbContext = new UniversityDbContext())
+        using (var dbContext = new UniversityDbContext(_connectionString))
         {
             var building = dbContext.Buildings.FirstOrDefault(b => b.Name == buildingName);
             if (building != null)
@@ -265,11 +291,15 @@ class Program
 
                 if (firstClassroom != null)
                 {
-                    await botClient.SendTextMessageAsync(chatId, $"Корпус: {buildingName}\nКількість поверхів: {floorsCount}\nКількість аудиторій: {classroomsCount}\nПерша аудиторія: {firstClassroom.Number}");
+                    await botClient.SendTextMessageAsync(chatId, 
+                        $"Корпус: {buildingName}\nКількість поверхів: {floorsCount}\nКількість аудиторій: " +
+                        $"{classroomsCount}\nПерша аудиторія: {firstClassroom.Number}");
                 }
                 else
                 {
-                    await botClient.SendTextMessageAsync(chatId, $"Корпус: {buildingName}\nКількість поверхів: {floorsCount}\nКількість аудиторій: {classroomsCount}\nУ цьому корпусі ще немає аудиторій.");
+                    await botClient.SendTextMessageAsync(chatId, 
+                        $"Корпус: {buildingName}\nКількість поверхів: {floorsCount}\nКількість аудиторій: " +
+                        $"{classroomsCount}\nУ цьому корпусі ще немає аудиторій.");
                 }
             }
             else
